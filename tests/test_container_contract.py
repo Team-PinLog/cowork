@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 
 BASE_IMAGE = (
@@ -11,13 +12,22 @@ def test_container_is_pinned_non_root_and_uses_persistent_paths():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
 
     assert f"FROM {BASE_IMAGE}" in dockerfile
-    assert "hermes-agent==0.19.0" in dockerfile
+    assert "hermes-agent[mcp]==0.19.0" in dockerfile
     assert "USER 1000:1000" in dockerfile
     assert "HERMES_HOME=/data/hermes" in dockerfile
     assert "COWORK_DATABASE_PATH=/data/cowork.db" in dockerfile
     assert "HERMES_PYTHON=/usr/local/bin/python" in dockerfile
     assert 'CMD ["uvicorn", "app.main:create_app", "--factory"' in dockerfile
     assert ":latest" not in dockerfile
+
+
+def test_runtime_dependencies_are_compatible_with_hermes_mcp():
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+
+    assert "starlette==1.0.1" in project["dependencies"]
+    test_dependencies = project["optional-dependencies"]["test"]
+    assert "httpx==0.28.1" in test_dependencies
+    assert all(not dependency.startswith("httpx2") for dependency in test_dependencies)
 
 
 def test_container_context_excludes_credentials_and_runtime_data():

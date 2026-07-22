@@ -17,7 +17,7 @@ COPY pyproject.toml README.md ./
 COPY app ./app
 
 RUN python -m pip install --no-cache-dir --disable-pip-version-check \
-    "hermes-agent==0.19.0" .
+    "hermes-agent[mcp]==0.19.0" .
 
 USER 1000:1000
 
