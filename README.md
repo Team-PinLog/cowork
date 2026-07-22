@@ -47,7 +47,7 @@ set -a; . ./.env; set +a
 
 `jira_account_id` 조회가 유일하지 않거나 누락되면 등록이 거부됩니다.
 
-## 실행
+## 로컬 실행
 
 ```bash
 set -a; . ./.env; set +a
@@ -56,7 +56,16 @@ set -a; . ./.env; set +a
 
 TLS reverse proxy 뒤에서 운영합니다. `COWORK_COOKIE_SECURE=true`를 유지합니다.
 
-`deploy/cowork.service`는 `/opt/pinlog-cowork`의 read-only code와 `/var/lib/cowork`의 private HOME/data를 전제로 합니다. 먼저 `cowork` 전용 system user를 만들고 그 HOME에서 Atlassian MCP OAuth를 승인해야 합니다. 앱은 root로 실행하지 않습니다.
+## 컨테이너와 k3s 배포
+
+`Dockerfile`은 Python과 Hermes Agent 버전을 고정하고 UID/GID 1000의 non-root
+사용자로 실행합니다. SQLite와 Hermes profile/OAuth 상태는 `/data` 아래에 두며,
+운영에서는 하나의 영속 PVC를 마운트합니다. image tag는 Git commit SHA만 사용하고
+`main` CI가 검증한 image만 GHCR에 게시합니다.
+
+실제 배포는 PinLog k3s와 Argo CD GitOps로 관리합니다. SQLite singleton이므로
+replica는 1이고 Deployment 전략은 `Recreate`여야 합니다. Tunnel token, Mattermost
+webhook, provider/OAuth credential은 image나 이 저장소에 포함하지 않습니다.
 
 요청 key는 불명확한 network 실패 동안 browser sessionStorage에 유지됩니다. Jira 생성 후 local receipt 저장 여부가 불명확하면 자동 재시도하지 않고 내부 `reconcile` 상태로 남기며 리드 알림을 보냅니다. Mattermost 전송 실패는 private SQLite outbox에 보존됩니다.
 
