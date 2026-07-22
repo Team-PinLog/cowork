@@ -1,0 +1,42 @@
+[Unit]
+Description=PinLog 할 일 올리기
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cowork
+Group=cowork
+WorkingDirectory=/opt/pinlog-cowork
+Environment=HOME=/var/lib/cowork
+EnvironmentFile=/etc/pinlog-cowork.env
+ExecStart=/opt/pinlog-cowork/.venv/bin/uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/cowork
+
+[Install]
+WantedBy=multi-user.target

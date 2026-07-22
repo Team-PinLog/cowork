@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>할 일 올리기</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main id="login-screen" class="center-card" hidden>
+    <section class="login-card" aria-labelledby="login-title">
+      <h1 id="login-title">할 일 올리기</h1>
+      <p class="description">적어두면 Jira 티켓으로 만들어드려요</p>
+      <form id="login-form" novalidate>
+        <label class="sr-only" for="email">이메일</label>
+        <input id="email" name="email" type="email" autocomplete="username" placeholder="name@company.com" required>
+        <label class="sr-only" for="password">비밀번호</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="비밀번호" required>
+        <p id="login-error" class="error" role="alert" hidden></p>
+        <button type="submit" class="primary full">로그인</button>
+      </form>
+    </section>
+  </main>
+
+  <main id="app-screen" hidden>
+    <header class="topbar">
+      <strong>할 일 올리기</strong>
+      <div class="account">
+        <button id="account-button" class="account-name" type="button" aria-expanded="false"></button>
+        <button id="logout-button" class="logout" type="button" hidden>로그아웃</button>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <div class="composer">
+        <label class="sr-only" for="todo-input">오늘 할 일</label>
+        <textarea id="todo-input" placeholder="오늘 할 일을 편하게 적어주세요" maxlength="10000"></textarea>
+        <div class="composer-footer">
+          <span id="progress" class="progress" aria-live="polite"></span>
+          <button id="create-button" class="primary" type="button">티켓 만들기</button>
+        </div>
+      </div>
+      <p id="create-error" class="error result-error" role="alert" hidden></p>
+
+      <section id="receipt-section" class="receipts" hidden>
+        <h2>오늘 만든 티켓</h2>
+        <ul id="ticket-list"></ul>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
