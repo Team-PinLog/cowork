@@ -33,6 +33,7 @@ def test_required_ci_workflow_is_pinned_and_runs_all_gates():
     assert "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a" in workflow
     assert "ghcr.io/team-pinlog/cowork:${{ github.sha }}" in workflow
     assert "docker run --detach" in workflow
+    assert workflow.count("from mcp.client.auth.oauth2 import OAuthClientProvider") == 2
     assert "curl --fail --silent --show-error http://127.0.0.1:18080/health" in workflow
     assert "docker push" in workflow
     assert ":latest" not in workflow
