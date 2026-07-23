@@ -12,6 +12,7 @@ from .agent import (
 )
 from .alerts import MattermostAlerter
 from .database import Database
+from .roles import ticket_description, ticket_summary
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,10 @@ class SubmissionWorker:
             self.database.save_plan(
                 submission_id,
                 [
-                    {"summary": task.summary, "description": task.description}
+                    {
+                        "summary": ticket_summary(task.summary, submission["role_tag"]),
+                        "description": ticket_description(task.description),
+                    }
                     for task in plan.tasks
                 ],
                 plan.excluded,
@@ -154,6 +158,7 @@ class SubmissionWorker:
                     task,
                     submission["jira_account_id"],
                     submission["sprint_id"],
+                    submission["role_tag"],
                 )
             except AgentReconciliationRequired as exc:
                 detail = self._alert(

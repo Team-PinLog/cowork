@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .roles import ROLE_TAG_BY_DISPLAY_NAME, validate_role_tag
+
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -18,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     display_name TEXT NOT NULL,
     jira_account_id TEXT NOT NULL CHECK (length(jira_account_id) > 0),
+    role_tag TEXT NOT NULL CHECK (role_tag IN ('FE','BE','Infra','AI')),
     created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -34,6 +37,9 @@ CREATE TABLE IF NOT EXISTS submissions (
     raw_input TEXT NOT NULL,
     sprint_id INTEGER,
     sprint_name TEXT,
+    role_tag TEXT,
+    assignee_display_name TEXT,
+    assignee_jira_account_id TEXT,
     state TEXT NOT NULL CHECK (state IN ('received','organizing','creating','completed','partial','failed','reconcile')),
     public_message TEXT,
     excluded_json TEXT NOT NULL DEFAULT '[]',
@@ -96,6 +102,16 @@ class Database:
     def initialize(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            user_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(users)")
+            }
+            if "role_tag" not in user_columns:
+                conn.execute("ALTER TABLE users ADD COLUMN role_tag TEXT")
+            for display_name, role_tag in ROLE_TAG_BY_DISPLAY_NAME.items():
+                conn.execute(
+                    "UPDATE users SET role_tag=? WHERE display_name=? AND role_tag IS NULL",
+                    (role_tag, display_name),
+                )
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(submissions)")}
             if "planned_tasks_json" not in columns:
                 conn.execute(
@@ -105,21 +121,44 @@ class Database:
                 conn.execute("ALTER TABLE submissions ADD COLUMN sprint_id INTEGER")
             if "sprint_name" not in columns:
                 conn.execute("ALTER TABLE submissions ADD COLUMN sprint_name TEXT")
+            if "role_tag" not in columns:
+                conn.execute("ALTER TABLE submissions ADD COLUMN role_tag TEXT")
+            if "assignee_display_name" not in columns:
+                conn.execute("ALTER TABLE submissions ADD COLUMN assignee_display_name TEXT")
+            if "assignee_jira_account_id" not in columns:
+                conn.execute("ALTER TABLE submissions ADD COLUMN assignee_jira_account_id TEXT")
 
-    def upsert_user(self, email: str, password_hash: str, display_name: str, jira_account_id: str) -> None:
+    def upsert_user(
+        self,
+        email: str,
+        password_hash: str,
+        display_name: str,
+        jira_account_id: str,
+        role_tag: str,
+    ) -> None:
         if not jira_account_id.strip():
             raise ValueError("jira_account_id is required")
+        role_tag = validate_role_tag(role_tag)
         now = int(time.time())
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
-                """INSERT INTO users(email,password_hash,display_name,jira_account_id,created_at)
-                   VALUES(?,?,?,?,?)
+                """INSERT INTO users
+                   (email,password_hash,display_name,jira_account_id,role_tag,created_at)
+                   VALUES(?,?,?,?,?,?)
                    ON CONFLICT(email) DO UPDATE SET
                      password_hash=excluded.password_hash,
                      display_name=excluded.display_name,
-                     jira_account_id=excluded.jira_account_id""",
-                (email.strip().lower(), password_hash, display_name.strip(), jira_account_id.strip(), now),
+                     jira_account_id=excluded.jira_account_id,
+                     role_tag=excluded.role_tag""",
+                (
+                    email.strip().lower(),
+                    password_hash,
+                    display_name.strip(),
+                    jira_account_id.strip(),
+                    role_tag,
+                    now,
+                ),
             )
             conn.commit()
 
@@ -165,7 +204,11 @@ class Database:
         raw_input: str,
         sprint_id: int,
         sprint_name: str,
+        role_tag: str,
+        assignee_display_name: str,
+        assignee_jira_account_id: str,
     ) -> tuple[str, bool]:
+        role_tag = validate_role_tag(role_tag)
         now = int(time.time())
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -182,8 +225,9 @@ class Database:
                 return str(row["id"]), False
             conn.execute(
                 """INSERT INTO submissions
-                   (id,user_id,idempotency_key,raw_input,sprint_id,sprint_name,state,created_at,updated_at)
-                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                   (id,user_id,idempotency_key,raw_input,sprint_id,sprint_name,role_tag,
+                    assignee_display_name,assignee_jira_account_id,state,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     submission_id,
                     user_id,
@@ -191,6 +235,9 @@ class Database:
                     raw_input,
                     sprint_id,
                     sprint_name,
+                    role_tag,
+                    assignee_display_name,
+                    assignee_jira_account_id,
                     "received",
                     now,
                     now,
@@ -301,6 +348,7 @@ class Database:
         result["excluded"] = json.loads(result.pop("excluded_json"))
         result["preview"] = json.loads(result.pop("planned_tasks_json"))
         result["tickets"] = [dict(ticket) for ticket in tickets]
+        result.pop("assignee_jira_account_id", None)
         result.pop("raw_input", None)
         result.pop("internal_error", None)
         result.pop("idempotency_key", None)
@@ -309,13 +357,25 @@ class Database:
     def get_submission_for_worker(self, submission_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
             row = conn.execute(
-                """SELECT s.*,u.display_name,u.jira_account_id FROM submissions s
-                   JOIN users u ON u.id=s.user_id WHERE s.id=?""",
+                """SELECT s.*,u.display_name AS user_display_name,
+                          u.jira_account_id AS user_jira_account_id,
+                          u.role_tag AS user_role_tag
+                   FROM submissions s JOIN users u ON u.id=s.user_id WHERE s.id=?""",
                 (submission_id,),
             ).fetchone()
         if not row:
             return None
         result = dict(row)
+        result["display_name"] = (
+            result.get("assignee_display_name") or result["user_display_name"]
+        )
+        result["jira_account_id"] = (
+            result.get("assignee_jira_account_id") or result["user_jira_account_id"]
+        )
+        result["role_tag"] = result.get("role_tag") or result["user_role_tag"]
+        result.pop("user_display_name", None)
+        result.pop("user_jira_account_id", None)
+        result.pop("user_role_tag", None)
         result["excluded"] = json.loads(result.pop("excluded_json"))
         result["planned_tasks"] = json.loads(result.pop("planned_tasks_json"))
         return result

@@ -24,12 +24,16 @@ def test_screen_contract_and_forbidden_vocabulary():
         "확인하고 만들기",
         "활성 스프린트",
         "활성 스프린트를 선택해주세요",
+        "담당자",
+        "태그",
     ):
         assert required in full_contract
 
     assert 'id="preview-section"' in html
     assert 'id="preview-list"' in html
     assert 'id="confirm-button"' in html
+    assert 'id="preview-assignee-name"' in html
+    assert 'id="preview-role-tag"' in html
     assert "/confirm" in script
 
     for forbidden in ("이슈", "이슈 타입", "백로그", "에픽", "스토리", "하위 작업", "어사인", "담당자 배정"):

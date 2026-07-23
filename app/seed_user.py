@@ -9,6 +9,7 @@ import subprocess
 
 from .config import Settings
 from .database import Database
+from .roles import VALID_ROLE_TAGS, role_tag_for
 from .security import hash_password
 
 
@@ -47,7 +48,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Interactively seed one cowork user")
     parser.add_argument("--email", required=True)
     parser.add_argument("--display-name", required=True)
+    parser.add_argument("--role-tag", choices=sorted(VALID_ROLE_TAGS))
     args = parser.parse_args()
+    role_tag = args.role_tag or role_tag_for(args.display_name)
+    if not role_tag:
+        raise SystemExit("신규 사용자는 --role-tag가 필요합니다")
     password = getpass.getpass("새 비밀번호: ")
     confirmation = getpass.getpass("새 비밀번호 확인: ")
     if password != confirmation:
@@ -57,7 +62,7 @@ def main() -> None:
     database.initialize()
     account_id = lookup_account_id(settings, args.display_name)
     database.upsert_user(
-        args.email, hash_password(password), args.display_name, account_id
+        args.email, hash_password(password), args.display_name, account_id, role_tag
     )
     print(f"등록 완료: {args.display_name}")
 

@@ -20,9 +20,11 @@ class RecordingAgent:
         )
 
     def create_task(
-        self, task: PlannedTask, jira_account_id: str, sprint_id: int
+        self, task: PlannedTask, jira_account_id: str, sprint_id: int, role_tag: str
     ) -> CreatedTicket:
         assert sprint_id == 50563
+        assert role_tag == "BE"
+        assert task.summary.startswith("[BE] ")
         self.assignees.append(jira_account_id)
         index = len(self.assignees)
         if self.fail_at == index:
@@ -46,11 +48,23 @@ def setup_submission(tmp_path, raw="첫 작업\n둘째 작업\n셋째 작업"):
     database = Database(tmp_path / "cowork.db")
     database.initialize()
     database.upsert_user(
-        "member@example.com", hash_password("safe-password-123"), "김팀원", "jira-account-exact"
+        "member@example.com",
+        hash_password("safe-password-123"),
+        "김팀원",
+        "jira-account-exact",
+        "BE",
     )
     user = database.find_user("member@example.com")
     submission_id, _ = database.create_submission(
-        "sub-1", user["id"], "idem-1", raw, 50563, "S15P11A7 1 스프린트 2"
+        "sub-1",
+        user["id"],
+        "idem-1",
+        raw,
+        50563,
+        "S15P11A7 1 스프린트 2",
+        "BE",
+        "김팀원",
+        "jira-account-exact",
     )
     return database, user, submission_id
 
