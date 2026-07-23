@@ -18,7 +18,7 @@ from .agent import HermesJiraAgent
 from .alerts import MattermostAlerter
 from .config import Settings
 from .database import Database, IdempotencyConflict
-from .roles import validate_role_tag
+from .roles import ticket_description, ticket_summary, validate_role_tag
 from .security import hash_password, new_token, token_digest, verify_password
 from .worker import SubmissionWorker
 
@@ -78,6 +78,15 @@ class SubmissionRequest(BaseModel):
     text: str = Field(max_length=10_000)
     idempotency_key: str = Field(min_length=36, max_length=36)
     sprint_id: int = Field(gt=0)
+
+
+class DraftTaskRequest(BaseModel):
+    summary: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+
+
+class DraftUpdateRequest(BaseModel):
+    tasks: list[DraftTaskRequest] = Field(min_length=1, max_length=20)
 
 
 def create_app(
@@ -315,6 +324,40 @@ def create_app(
         elif submission["state"] not in {"creating", "completed", "partial", "reconcile"}:
             raise HTTPException(status_code=409, detail="티켓 정보를 다시 확인해주세요")
         return {"submission_id": submission_id}
+
+    @app.put("/api/submissions/{submission_id}/draft")
+    def update_submission_draft(
+        submission_id: str,
+        payload: DraftUpdateRequest,
+        cowork_session: str | None = Cookie(default=None),
+        x_csrf_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        user, csrf_token, _ = session_context(cowork_session)
+        require_csrf(csrf_token, x_csrf_token)
+        try:
+            uuid.UUID(submission_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다") from exc
+        submission = database.get_submission(submission_id, user["id"])
+        if not submission:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        if submission["state"] != "organizing" or not submission["preview"]:
+            raise HTTPException(status_code=409, detail="더 이상 수정할 수 없는 티켓입니다")
+        if len(payload.tasks) != len(submission["preview"]):
+            raise HTTPException(status_code=409, detail="티켓 개수는 변경할 수 없습니다")
+        try:
+            tasks = [
+                {
+                    "summary": ticket_summary(task.summary, submission["role_tag"]),
+                    "description": ticket_description(task.description),
+                }
+                for task in payload.tasks
+            ]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="티켓 제목을 확인해주세요") from exc
+        if not database.update_planned_tasks(submission_id, user["id"], tasks):
+            raise HTTPException(status_code=409, detail="더 이상 수정할 수 없는 티켓입니다")
+        return {"preview": tasks}
 
     @app.get("/api/submissions/{submission_id}")
     def submission_status(

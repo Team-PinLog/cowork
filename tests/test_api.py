@@ -33,6 +33,12 @@ class ImmediateSuccessWorker:
     def create(self, submission_id: str) -> None:
         self.create_calls += 1
         submission = self.database.get_submission_for_worker(submission_id)
+        assert submission["planned_tasks"] == [
+            {
+                "summary": "[BE] 결제 연동 오류 수정",
+                "description": "## 작업 내용\n재현 절차를 확인한다",
+            }
+        ]
         self.database.add_ticket(
             submission_id,
             "S15P11A705-101",
@@ -129,7 +135,28 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
     assert preview["preview"] == [
         {"summary": "결제 연동 완료", "description": None}
     ]
+    assert preview["assignee"] == {"display_name": "김팀원", "role_tag": "BE"}
     assert preview["tickets"] == []
+
+    edited = client.put(
+        f"/api/submissions/{submission_id}/draft",
+        json={
+            "tasks": [
+                {
+                    "summary": "[FE] 결제 연동 오류 수정",
+                    "description": "재현 절차를 확인한다",
+                }
+            ]
+        },
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["preview"] == [
+        {
+            "summary": "[BE] 결제 연동 오류 수정",
+            "description": "## 작업 내용\n재현 절차를 확인한다",
+        }
+    ]
 
     confirmed = client.post(
         f"/api/submissions/{submission_id}/confirm",

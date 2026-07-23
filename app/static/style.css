@@ -49,7 +49,10 @@ input:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(47,100,255,.14); }
 #preview-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 #preview-list li { padding: 15px 16px; border: 1px solid #e1e6ed; border-radius: 10px; background: #f9fafc; }
 #preview-list strong { display: block; line-height: 1.5; }
-#preview-list p { margin: 7px 0 0; color: #566174; line-height: 1.55; white-space: pre-wrap; }
+#preview-list p { margin: 8px 0 0; color: #596579; white-space: pre-wrap; line-height: 1.55; }
+.preview-summary-input { width: 100%; border: 1px solid #cbd4e1; border-radius: 8px; padding: 10px 11px; font-weight: 700; color: #263248; background: #fff; }
+.preview-description-input { width: 100%; min-height: 96px; margin-top: 9px; border: 1px solid #cbd4e1; border-radius: 8px; padding: 10px 11px; resize: vertical; color: #45536a; background: #fff; }
+.preview-summary-input:focus, .preview-description-input:focus { outline: 2px solid #9eb8ff; border-color: #5f82dd; }
 .preview-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .secondary { border: 1px solid #cfd6df; border-radius: 9px; background: #fff; color: #364153; padding: 11px 18px; font-weight: 700; }
 .secondary:hover { background: #f3f5f8; }

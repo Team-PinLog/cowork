@@ -21,6 +21,7 @@ def test_screen_contract_and_forbidden_vocabulary():
         "티켓 정보 확인",
         "아래 내용으로 Jira 티켓이 만들어집니다",
         "수정하기",
+        "수정 완료",
         "확인하고 만들기",
         "활성 스프린트",
         "활성 스프린트를 선택해주세요",
@@ -35,6 +36,9 @@ def test_screen_contract_and_forbidden_vocabulary():
     assert 'id="preview-assignee-name"' in html
     assert 'id="preview-role-tag"' in html
     assert "/confirm" in script
+    assert "/draft" in script
+    assert "preview-summary-input" in script
+    assert "preview-description-input" in script
 
     for forbidden in ("이슈", "이슈 타입", "백로그", "에픽", "스토리", "하위 작업", "어사인", "담당자 배정"):
         assert forbidden not in visible_contract

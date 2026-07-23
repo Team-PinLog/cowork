@@ -300,6 +300,23 @@ class Database:
             )
         return cursor.rowcount == 1
 
+    def update_planned_tasks(
+        self, submission_id: str, user_id: int, tasks: list[dict[str, Any]]
+    ) -> bool:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """UPDATE submissions SET planned_tasks_json=?, updated_at=?
+                   WHERE id=? AND user_id=? AND state='organizing'
+                     AND planned_tasks_json != '[]'""",
+                (
+                    json.dumps(tasks, ensure_ascii=False),
+                    int(time.time()),
+                    submission_id,
+                    user_id,
+                ),
+            )
+        return cursor.rowcount == 1
+
     def add_ticket(self, submission_id: str, issue_key: str, summary: str, url: str) -> None:
         with self.connect() as conn:
             cursor = conn.execute(
