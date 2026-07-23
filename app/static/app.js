@@ -21,6 +21,7 @@ const previewRoleTag = document.querySelector('#preview-role-tag');
 
 let csrfToken = '';
 let creating = false;
+let editingPreview = false;
 let pendingConfirmation = null;
 const receipts = [];
 const pendingStorageKey = 'cowork_pending_request';
@@ -176,21 +177,51 @@ function hidePreview() {
   previewRoleTag.textContent = '';
 }
 
-function showPreview(submissionId, sentText, sprint, assignee, tasks) {
+function descriptionBody(description) {
+  return (description || '').replace(/^##\s*작업 내용\s*/, '').trim();
+}
+
+function summaryBody(summary) {
+  return (summary || '').replace(/^\s*\[(?:FE|BE|Infra|AI)\]\s*/i, '').trim();
+}
+
+function renderPreviewTasks(tasks, editing = false) {
   previewList.replaceChildren();
-  for (const task of tasks) {
+  tasks.forEach((task, index) => {
     const row = document.createElement('li');
-    const summary = document.createElement('strong');
-    summary.textContent = task.summary;
-    row.append(summary);
-    if (task.description) {
+    if (editing) {
+      const summary = document.createElement('input');
+      summary.className = 'preview-summary-input';
+      summary.value = summaryBody(task.summary);
+      summary.maxLength = 255;
+      summary.required = true;
+      summary.setAttribute('aria-label', `${index + 1}번 티켓 제목`);
+      const description = document.createElement('textarea');
+      description.className = 'preview-description-input';
+      description.value = descriptionBody(task.description);
+      description.maxLength = 5000;
+      description.setAttribute('aria-label', `${index + 1}번 티켓 설명`);
+      row.append(summary, description);
+    } else {
+      const summary = document.createElement('strong');
+      summary.textContent = task.summary;
+      row.append(summary);
+    }
+    if (!editing && task.description) {
       const description = document.createElement('p');
       description.textContent = task.description;
       row.append(description);
     }
     previewList.append(row);
-  }
-  pendingConfirmation = {submissionId, sentText};
+  });
+}
+
+function showPreview(submissionId, sentText, sprint, assignee, tasks) {
+  renderPreviewTasks(tasks);
+  pendingConfirmation = {submissionId, sentText, sprint, assignee, tasks};
+  editingPreview = false;
+  editButton.textContent = '수정하기';
+  confirmButton.disabled = false;
   previewSprintName.textContent = sprint?.name || '';
   previewAssigneeName.textContent = assignee?.display_name || '';
   previewRoleTag.textContent = assignee?.role_tag || '';
@@ -205,6 +236,7 @@ function showPreview(submissionId, sentText, sprint, assignee, tasks) {
 
 function finishCreation() {
   creating = false;
+  editingPreview = false;
   pendingConfirmation = null;
   hidePreview();
   todoInput.disabled = false;
@@ -259,18 +291,53 @@ async function pollSubmission(submissionId, sentText) {
   }
 }
 
-editButton.addEventListener('click', () => {
-  pendingConfirmation = null;
-  hidePreview();
-  todoInput.disabled = false;
-  sprintSelect.disabled = false;
-  createButton.disabled = !sprintSelect.value;
-  progress.textContent = '';
-  todoInput.focus();
+editButton.addEventListener('click', async () => {
+  if (!pendingConfirmation || creating) return;
+  if (!editingPreview) {
+    editingPreview = true;
+    renderPreviewTasks(pendingConfirmation.tasks, true);
+    editButton.textContent = '수정 완료';
+    confirmButton.disabled = true;
+    previewList.querySelector('input')?.focus();
+    return;
+  }
+  const summaries = [...previewList.querySelectorAll('.preview-summary-input')];
+  const descriptions = [...previewList.querySelectorAll('.preview-description-input')];
+  const tasks = summaries.map((summary, index) => ({
+    summary: summary.value.trim(),
+    description: descriptions[index].value.trim() || null,
+  }));
+  if (tasks.some((task) => !task.summary)) {
+    createError.textContent = '모든 티켓의 제목을 입력해주세요';
+    createError.hidden = false;
+    return;
+  }
+  editButton.disabled = true;
+  createError.hidden = true;
+  try {
+    const result = await jsonFetch(
+      `/api/submissions/${pendingConfirmation.submissionId}/draft`,
+      {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+        body: JSON.stringify({tasks}),
+      },
+    );
+    pendingConfirmation.tasks = result.preview;
+    renderPreviewTasks(result.preview);
+    editingPreview = false;
+    editButton.textContent = '수정하기';
+    confirmButton.disabled = false;
+  } catch (error) {
+    createError.textContent = error.message;
+    createError.hidden = false;
+  } finally {
+    editButton.disabled = false;
+  }
 });
 
 confirmButton.addEventListener('click', async () => {
-  if (creating || !pendingConfirmation) return;
+  if (creating || editingPreview || !pendingConfirmation) return;
   const pending = pendingConfirmation;
   creating = true;
   createError.hidden = true;

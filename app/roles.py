@@ -39,4 +39,5 @@ def ticket_summary(summary: str, role_tag: str) -> str:
 def ticket_description(description: str | None) -> str | None:
     if not description or not description.strip():
         return None
-    return f"## 작업 내용\n{description.strip()}"
+    body = re.sub(r"^##\s*작업 내용\s*", "", description.strip()).strip()
+    return f"## 작업 내용\n{body}" if body else None
