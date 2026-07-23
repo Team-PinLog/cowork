@@ -311,6 +311,14 @@ def create_app(
         submission = database.get_submission(submission_id, user["id"])
         if not submission:
             raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        preview = submission["preview"]
+        if not preview:
+            raise HTTPException(status_code=409, detail="티켓 정보를 다시 확인해주세요")
+        if any(
+            ticket_description(task.get("description")) is None
+            for task in preview
+        ):
+            raise HTTPException(status_code=409, detail="모든 티켓의 설명을 입력해주세요")
         if submission["state"] == "organizing" and not any(
             sprint.id == submission["sprint_id"] for sprint in active_sprints()
         ):
@@ -344,13 +352,17 @@ def create_app(
         if submission["state"] != "organizing" or not submission["preview"]:
             raise HTTPException(status_code=409, detail="더 이상 수정할 수 없는 티켓입니다")
         try:
-            tasks = [
-                {
-                    "summary": ticket_summary(task.summary, submission["role_tag"]),
-                    "description": ticket_description(task.description),
-                }
-                for task in payload.tasks
-            ]
+            tasks = []
+            for task in payload.tasks:
+                description = ticket_description(task.description)
+                if description is None:
+                    raise HTTPException(status_code=422, detail="티켓 설명을 입력해주세요")
+                tasks.append(
+                    {
+                        "summary": ticket_summary(task.summary, submission["role_tag"]),
+                        "description": description,
+                    }
+                )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="티켓 제목을 확인해주세요") from exc
         if not database.update_planned_tasks(submission_id, user["id"], tasks):

@@ -41,12 +41,21 @@ def main() -> None:
         raise SystemExit("invalid request")
     if not isinstance(payload, dict) or set(payload) - ALLOWED:
         raise SystemExit("invalid request")
-    required = {"cloudId", "projectKey", "issueTypeName", "summary", "assignee_account_id"}
+    required = {
+        "cloudId",
+        "projectKey",
+        "issueTypeName",
+        "summary",
+        "description",
+        "assignee_account_id",
+    }
     if not required.issubset(payload):
         raise SystemExit("invalid request")
     if payload["issueTypeName"] != "Task":
         raise SystemExit("invalid request")
     if not all(isinstance(payload[key], str) and payload[key] for key in required):
+        raise SystemExit("invalid request")
+    if not payload["description"].strip():
         raise SystemExit("invalid request")
     additional_fields = payload.get("additional_fields")
     if (

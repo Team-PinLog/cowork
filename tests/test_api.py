@@ -138,6 +138,14 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
     assert preview["assignee"] == {"display_name": "김팀원", "role_tag": "BE"}
     assert preview["tickets"] == []
 
+    invalid_confirmation = client.post(
+        f"/api/submissions/{submission_id}/confirm",
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert invalid_confirmation.status_code == 409
+    assert invalid_confirmation.json()["detail"] == "모든 티켓의 설명을 입력해주세요"
+    assert worker.create_calls == 0
+
     empty = client.put(
         f"/api/submissions/{submission_id}/draft",
         json={"tasks": []},
@@ -145,11 +153,27 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
     )
     assert empty.status_code == 422
 
+    for invalid_description in (None, "   "):
+        missing_description = client.put(
+            f"/api/submissions/{submission_id}/draft",
+            json={
+                "tasks": [
+                    {
+                        "summary": "결제 연동 오류 수정",
+                        "description": invalid_description,
+                    }
+                ]
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert missing_description.status_code == 422
+        assert missing_description.json()["detail"] == "티켓 설명을 입력해주세요"
+
     added = client.put(
         f"/api/submissions/{submission_id}/draft",
         json={
             "tasks": [
-                {"summary": "결제 연동 오류 수정", "description": None},
+                {"summary": "결제 연동 오류 수정", "description": "오류 원인을 확인한다"},
                 {"summary": "결제 모니터링 추가", "description": "지표를 추가한다"},
             ]
         },
@@ -198,6 +222,34 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
             "url": "https://ssafy.atlassian.net/browse/S15P11A705-101",
         }
     ]
+
+
+def test_confirmation_before_preview_is_rejected_without_worker_create(client_and_worker):
+    client, worker, database = client_and_worker
+    csrf = login(client)
+    user = database.find_user("member@example.com")
+    assert user is not None
+    submission_id = str(uuid.uuid4())
+    database.create_submission(
+        submission_id,
+        user["id"],
+        str(uuid.uuid4()),
+        "아직 정리 중인 작업",
+        50563,
+        "S15P11A7 1 스프린트 2",
+        "BE",
+        "김팀원",
+        "jira-account-1",
+    )
+
+    response = client.post(
+        f"/api/submissions/{submission_id}/confirm",
+        headers={"X-CSRF-Token": csrf},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "티켓 정보를 다시 확인해주세요"
+    assert worker.create_calls == 0
 
 
 def test_csrf_and_cross_user_submission_access_are_blocked(client_and_worker):

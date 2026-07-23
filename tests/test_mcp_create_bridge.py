@@ -30,6 +30,7 @@ def test_dispatch_exception_exits_as_post_create_ambiguous(monkeypatch, capsys):
         "projectKey": "S15P11A705",
         "issueTypeName": "Task",
         "summary": "합성 작업",
+        "description": "합성 작업 상세",
         "assignee_account_id": "synthetic-account",
         "contentFormat": "markdown",
         "additional_fields": {"customfield_10020": 50563, "labels": ["Infra"]},
@@ -71,6 +72,7 @@ def test_direct_atlassian_create_response_returns_issue_key(monkeypatch, capsys)
         "projectKey": "S15P11A705",
         "issueTypeName": "Task",
         "summary": "합성 작업",
+        "description": "합성 작업 상세",
         "assignee_account_id": "synthetic-account",
         "contentFormat": "markdown",
         "additional_fields": {"customfield_10020": 50563, "labels": ["Infra"]},
@@ -80,3 +82,35 @@ def test_direct_atlassian_create_response_returns_issue_key(monkeypatch, capsys)
     bridge.main()
 
     assert json.loads(capsys.readouterr().out) == {"issue_key": "S15P11A705-17"}
+
+
+def test_empty_description_is_rejected_before_mcp_dispatch(monkeypatch):
+    tools_package = types.ModuleType("tools")
+    mcp_module = types.ModuleType("tools.mcp_tool")
+    registry_module = types.ModuleType("tools.registry")
+
+    def unexpected_call(*_args, **_kwargs):
+        raise AssertionError("MCP must not be called")
+
+    setattr(mcp_module, "discover_mcp_tools", unexpected_call)
+    setattr(registry_module, "registry", SimpleNamespace(dispatch=unexpected_call))
+    monkeypatch.setitem(sys.modules, "tools", tools_package)
+    monkeypatch.setitem(sys.modules, "tools.mcp_tool", mcp_module)
+    monkeypatch.setitem(sys.modules, "tools.registry", registry_module)
+    sys.modules.pop("app.mcp_create_bridge", None)
+    bridge = importlib.import_module("app.mcp_create_bridge")
+
+    request = {
+        "cloudId": "https://ssafy.atlassian.net",
+        "projectKey": "S15P11A705",
+        "issueTypeName": "Task",
+        "summary": "합성 작업",
+        "description": "   ",
+        "assignee_account_id": "synthetic-account",
+        "contentFormat": "markdown",
+        "additional_fields": {"customfield_10020": 50563, "labels": ["Infra"]},
+    }
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(request)))
+
+    with pytest.raises(SystemExit, match="invalid request"):
+        bridge.main()
