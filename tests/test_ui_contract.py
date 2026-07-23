@@ -6,6 +6,7 @@ def test_screen_contract_and_forbidden_vocabulary():
     html = Path("app/static/index.html").read_text(encoding="utf-8")
     script = Path("app/static/app.js").read_text(encoding="utf-8")
     backend = Path("app/main.py").read_text(encoding="utf-8")
+    planner = Path("app/agent.py").read_text(encoding="utf-8")
     visible_contract = html + script
     full_contract = visible_contract + backend
 
@@ -13,8 +14,14 @@ def test_screen_contract_and_forbidden_vocabulary():
         "할 일 올리기",
         "적어두면 Jira 티켓으로 만들어드려요",
         "name@company.com",
-        "할 일 입력 가이드",
+        "AI와 대화해서 티켓을 구체화하세요",
         "가이드 복사",
+        "한 번에 가장 중요한 질문 1개만 합니다",
+        "담당자·역할·스프린트는 Cowork가 자동으로 적용합니다",
+        "목적/배경: 작업이 필요한 이유",
+        "상세 내용: 수행할 구체적인 작업 내용",
+        "검증 가능한 완료 기준 1",
+        "최종 결과만 Cowork에 붙여넣으세요",
         "작업 목록을 입력하거나 AI가 정리한 내용을 붙여넣어 주세요",
         "AI에게 전달할 가이드를 복사했습니다",
         "티켓 만들기",
@@ -56,6 +63,8 @@ def test_screen_contract_and_forbidden_vocabulary():
     assert "setProgress" in script
     assert "progress.classList.toggle('loading'" in script
     assert "navigator.clipboard.writeText" in script
+    assert "Treat `- [ ]` lines under `완료 조건:` as acceptance criteria" in planner
+    assert "`목적/배경:`" in planner
     assert "오늘 할 일을 편하게 적어주세요" not in html
 
     for forbidden in ("이슈", "이슈 타입", "백로그", "에픽", "스토리", "하위 작업", "어사인", "담당자 배정"):
@@ -68,6 +77,23 @@ def test_receipts_are_not_persisted_in_browser_storage():
     assert "JSON.stringify(receipts)" not in script
     assert "const receipts = []" in script
     assert "cowork_pending_request" in script
+
+
+def test_copied_interview_guide_keeps_parser_contract():
+    html = Path("app/static/index.html").read_text(encoding="utf-8")
+    prompt = html.split('<pre id="ai-guide-prompt" class="ai-guide-prompt">', 1)[1].split(
+        "</pre>", 1
+    )[0]
+
+    labels = ["제목:", "작업 내용:", "완료 조건:"]
+    positions = [prompt.index(label) for label in labels]
+    assert positions == sorted(positions)
+    assert all(prompt.count(label) == 1 for label in labels)
+    assert "- 목적/배경:" in prompt
+    assert "- 상세 내용:" in prompt
+    assert "- [ ] 검증 가능한 완료 기준 1" in prompt
+    assert "우선순위는 현재 Cowork가 반영하지 않으므로" in prompt
+    assert "질문하거나 최종 결과에 포함하지 않습니다" in prompt
 
 
 def test_static_asset_urls_include_current_content_hash():
