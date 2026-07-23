@@ -210,8 +210,9 @@ Rules:
 - Group a task title, its explanatory lines, and its completion criteria into one task.
 - Each genuinely independent deliverable becomes a separate task. Do not turn every detail or completion-criteria bullet into a separate task.
 - By default, separate standalone action lines are separate tasks, especially short unindented lines like `cowork 고도화` and `지라 + 깃허브 연동`.
-- Group lines only when their structure clearly marks them as context for a task, such as `작업 내용:`, `상세 내용:`, `완료 조건:`, or bullets under those sections.
-- Each repeated `제목:` line starts a new task; attach the following `작업 내용:` and `완료 조건:` sections to that task until the next `제목:` line.
+- Group lines only when their structure clearly marks them as context for a task, such as `작업 내용:`, `목적/배경:`, `상세 내용:`, `완료 조건:`, or bullets and checklist items under those sections.
+- Each repeated `제목:` line starts a new task; attach the following `작업 내용:`, `목적/배경:`, `상세 내용:`, and `완료 조건:` sections to that task until the next `제목:` line.
+- Treat `- [ ]` lines under `완료 조건:` as acceptance criteria, not as separate tasks, and preserve them under the `## 완료 조건` heading in description.
 - Never merge separate standalone action lines merely because they belong to the same project or theme.
 - A task may reference multiple related source lines. Split a single source line only when it clearly contains separate deliverables.
 - Exclude completed items (- [x], strikethrough, 완료), schedules/meetings, and notes/thoughts.
