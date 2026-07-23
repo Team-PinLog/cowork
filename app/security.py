@@ -7,8 +7,8 @@ import bcrypt
 
 
 def hash_password(password: str) -> str:
-    if len(password) < 10:
-        raise ValueError("password must be at least 10 characters")
+    if len(password) < 7:
+        raise ValueError("password must be at least 7 characters")
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
