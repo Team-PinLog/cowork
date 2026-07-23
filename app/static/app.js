@@ -16,6 +16,8 @@ const editButton = document.querySelector('#edit-button');
 const confirmButton = document.querySelector('#confirm-button');
 const sprintSelect = document.querySelector('#sprint-select');
 const previewSprintName = document.querySelector('#preview-sprint-name');
+const previewAssigneeName = document.querySelector('#preview-assignee-name');
+const previewRoleTag = document.querySelector('#preview-role-tag');
 
 let csrfToken = '';
 let creating = false;
@@ -170,9 +172,11 @@ function hidePreview() {
   previewSection.hidden = true;
   previewList.replaceChildren();
   previewSprintName.textContent = '';
+  previewAssigneeName.textContent = '';
+  previewRoleTag.textContent = '';
 }
 
-function showPreview(submissionId, sentText, sprint, tasks) {
+function showPreview(submissionId, sentText, sprint, assignee, tasks) {
   previewList.replaceChildren();
   for (const task of tasks) {
     const row = document.createElement('li');
@@ -188,6 +192,8 @@ function showPreview(submissionId, sentText, sprint, tasks) {
   }
   pendingConfirmation = {submissionId, sentText};
   previewSprintName.textContent = sprint?.name || '';
+  previewAssigneeName.textContent = assignee?.display_name || '';
+  previewRoleTag.textContent = assignee?.role_tag || '';
   previewSection.hidden = false;
   todoInput.disabled = true;
   sprintSelect.disabled = true;
@@ -225,7 +231,13 @@ async function pollSubmission(submissionId, sentText) {
     if (result.progress) progress.textContent = result.progress;
     if (['received', 'organizing', 'creating'].includes(result.state)) continue;
     if (result.state === 'review') {
-      showPreview(submissionId, sentText, result.sprint, result.preview || []);
+      showPreview(
+        submissionId,
+        sentText,
+        result.sprint,
+        result.assignee,
+        result.preview || [],
+      );
       return;
     }
     if (result.tickets?.length) {

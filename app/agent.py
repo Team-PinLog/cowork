@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .config import Settings
+from .roles import ticket_summary, validate_role_tag
 
 
 class AgentError(RuntimeError):
@@ -260,16 +261,24 @@ INPUT_LINES_JSON={encoded}
         return sprints
 
     def create_task(
-        self, task: PlannedTask, jira_account_id: str, sprint_id: int
+        self,
+        task: PlannedTask,
+        jira_account_id: str,
+        sprint_id: int,
+        role_tag: str,
     ) -> CreatedTicket:
+        role_tag = validate_role_tag(role_tag)
         request = {
             "cloudId": self.settings.jira_base_url,
             "projectKey": self.settings.project_key,
             "issueTypeName": "Task",
-            "summary": task.summary,
+            "summary": ticket_summary(task.summary, role_tag),
             "assignee_account_id": jira_account_id,
             "contentFormat": "markdown",
-            "additional_fields": {"customfield_10020": sprint_id},
+            "additional_fields": {
+                "customfield_10020": sprint_id,
+                "labels": [role_tag],
+            },
         }
         if task.description is not None:
             request["description"] = task.description

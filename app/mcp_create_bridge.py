@@ -8,6 +8,8 @@ from typing import Any, NoReturn
 from tools.mcp_tool import discover_mcp_tools
 from tools.registry import registry
 
+from .roles import VALID_ROLE_TAGS
+
 TOOL_NAME = "mcp__atlassian__createJiraIssue"
 ALLOWED = {
     "cloudId",
@@ -49,10 +51,13 @@ def main() -> None:
     additional_fields = payload.get("additional_fields")
     if (
         not isinstance(additional_fields, dict)
-        or set(additional_fields) != {"customfield_10020"}
+        or set(additional_fields) != {"customfield_10020", "labels"}
         or not isinstance(additional_fields["customfield_10020"], int)
         or isinstance(additional_fields["customfield_10020"], bool)
         or additional_fields["customfield_10020"] <= 0
+        or not isinstance(additional_fields["labels"], list)
+        or len(additional_fields["labels"]) != 1
+        or additional_fields["labels"][0] not in VALID_ROLE_TAGS
     ):
         raise SystemExit("invalid request")
 

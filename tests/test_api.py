@@ -60,7 +60,11 @@ def client_and_worker(tmp_path):
     database = Database(settings.database_path)
     database.initialize()
     database.upsert_user(
-        "member@example.com", hash_password("safe-password-123"), "김팀원", "jira-account-1"
+        "member@example.com",
+        hash_password("safe-password-123"),
+        "김팀원",
+        "jira-account-1",
+        "BE",
     )
     worker = ImmediateSuccessWorker(database)
     with TestClient(create_app(settings, database=database, worker=worker)) as client:
@@ -165,7 +169,11 @@ def test_csrf_and_cross_user_submission_access_are_blocked(client_and_worker):
     )
     submission_id = response.json()["submission_id"]
     database.upsert_user(
-        "other@example.com", hash_password("another-safe-password"), "다른 사용자", "jira-account-2"
+        "other@example.com",
+        hash_password("another-safe-password"),
+        "다른 사용자",
+        "jira-account-2",
+        "FE",
     )
     client.cookies.clear()
     client.post(

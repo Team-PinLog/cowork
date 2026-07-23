@@ -18,6 +18,7 @@ from .agent import HermesJiraAgent
 from .alerts import MattermostAlerter
 from .config import Settings
 from .database import Database, IdempotencyConflict
+from .roles import validate_role_tag
 from .security import hash_password, new_token, token_digest, verify_password
 from .worker import SubmissionWorker
 
@@ -248,6 +249,13 @@ def create_app(
         if not raw_input.strip():
             raise HTTPException(status_code=400, detail="할 일을 입력해주세요")
         try:
+            role_tag = validate_role_tag(user.get("role_tag") or "")
+        except ValueError:
+            raise HTTPException(
+                status_code=409,
+                detail="역할 태그가 등록되지 않았어요. 팀 리드에게 요청하세요",
+            ) from None
+        try:
             uuid.UUID(payload.idempotency_key)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="요청을 확인할 수 없습니다") from exc
@@ -268,6 +276,9 @@ def create_app(
                 raw_input,
                 selected_sprint.id,
                 selected_sprint.name,
+                role_tag,
+                user["display_name"],
+                user["jira_account_id"],
             )
         except IdempotencyConflict as exc:
             raise HTTPException(status_code=409, detail="요청을 다시 확인해주세요") from exc
@@ -335,6 +346,10 @@ def create_app(
             "sprint": {
                 "id": submission["sprint_id"],
                 "name": submission["sprint_name"],
+            },
+            "assignee": {
+                "display_name": submission["assignee_display_name"],
+                "role_tag": submission["role_tag"],
             },
             "preview": submission["preview"],
             "tickets": submission["tickets"],
