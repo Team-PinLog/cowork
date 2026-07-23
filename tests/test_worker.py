@@ -19,7 +19,10 @@ class RecordingAgent:
             excluded=["완료된 메모"],
         )
 
-    def create_task(self, task: PlannedTask, jira_account_id: str) -> CreatedTicket:
+    def create_task(
+        self, task: PlannedTask, jira_account_id: str, sprint_id: int
+    ) -> CreatedTicket:
+        assert sprint_id == 50563
         self.assignees.append(jira_account_id)
         index = len(self.assignees)
         if self.fail_at == index:
@@ -46,7 +49,9 @@ def setup_submission(tmp_path, raw="첫 작업\n둘째 작업\n셋째 작업"):
         "member@example.com", hash_password("safe-password-123"), "김팀원", "jira-account-exact"
     )
     user = database.find_user("member@example.com")
-    submission_id, _ = database.create_submission("sub-1", user["id"], "idem-1", raw)
+    submission_id, _ = database.create_submission(
+        "sub-1", user["id"], "idem-1", raw, 50563, "S15P11A7 1 스프린트 2"
+    )
     return database, user, submission_id
 
 

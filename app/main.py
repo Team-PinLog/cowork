@@ -76,6 +76,7 @@ class LoginRequest(BaseModel):
 class SubmissionRequest(BaseModel):
     text: str = Field(max_length=10_000)
     idempotency_key: str = Field(min_length=36, max_length=36)
+    sprint_id: int = Field(gt=0)
 
 
 def create_app(
@@ -141,6 +142,15 @@ def create_app(
         if not provided or not secrets.compare_digest(expected, provided):
             raise HTTPException(status_code=403, detail="요청을 확인할 수 없습니다")
 
+    def active_sprints() -> list[Any]:
+        try:
+            return worker.list_active_sprints()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="활성 스프린트를 불러오지 못했어요. 잠시 후 다시 시도해주세요",
+            ) from exc
+
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(static_dir / "index.html")
@@ -201,6 +211,17 @@ def create_app(
         )
         return {"display_name": user["display_name"]}
 
+    @app.get("/api/sprints")
+    def list_active_sprints(
+        cowork_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        session_context(cowork_session)
+        return {
+            "sprints": [
+                {"id": sprint.id, "name": sprint.name} for sprint in active_sprints()
+            ]
+        }
+
     @app.post("/api/logout", status_code=204)
     def logout(
         cowork_session: str | None = Cookie(default=None),
@@ -230,9 +251,23 @@ def create_app(
             uuid.UUID(payload.idempotency_key)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="요청을 확인할 수 없습니다") from exc
+        selected_sprint = next(
+            (sprint for sprint in active_sprints() if sprint.id == payload.sprint_id),
+            None,
+        )
+        if not selected_sprint:
+            raise HTTPException(
+                status_code=409,
+                detail="선택한 스프린트가 더 이상 활성 상태가 아니에요",
+            )
         try:
             submission_id, created = database.create_submission(
-                str(uuid.uuid4()), user["id"], payload.idempotency_key, raw_input
+                str(uuid.uuid4()),
+                user["id"],
+                payload.idempotency_key,
+                raw_input,
+                selected_sprint.id,
+                selected_sprint.name,
             )
         except IdempotencyConflict as exc:
             raise HTTPException(status_code=409, detail="요청을 다시 확인해주세요") from exc
@@ -256,6 +291,13 @@ def create_app(
         submission = database.get_submission(submission_id, user["id"])
         if not submission:
             raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        if submission["state"] == "organizing" and not any(
+            sprint.id == submission["sprint_id"] for sprint in active_sprints()
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="선택한 스프린트가 더 이상 활성 상태가 아니에요",
+            )
         claimed = database.claim_confirmation(submission_id, user["id"])
         if claimed:
             background_tasks.add_task(worker.create, submission_id)
@@ -290,6 +332,10 @@ def create_app(
             "state": state,
             "progress": progress,
             "message": submission["public_message"],
+            "sprint": {
+                "id": submission["sprint_id"],
+                "name": submission["sprint_name"],
+            },
             "preview": submission["preview"],
             "tickets": submission["tickets"],
             "retryable": state == "failed",

@@ -81,6 +81,12 @@ class CreatedTicket:
     url: str
 
 
+@dataclass(frozen=True)
+class ActiveSprint:
+    id: int
+    name: str
+
+
 def _parse_plan_payload(payload: dict[str, Any], source_lines: list[str]) -> Plan:
     if set(payload) != {"tasks", "excluded"}:
         raise AgentError("invalid planning response fields")
@@ -212,7 +218,50 @@ INPUT_LINES_JSON={encoded}
             corrected_payload = self._run(correction_prompt, max_turns=2)
             return _parse_plan_payload(corrected_payload, source_lines)
 
-    def create_task(self, task: PlannedTask, jira_account_id: str) -> CreatedTicket:
+    def list_active_sprints(self) -> list[ActiveSprint]:
+        request = {
+            "cloudId": self.settings.jira_base_url,
+            "projectKey": self.settings.project_key,
+        }
+        try:
+            completed = subprocess.run(
+                [self.settings.hermes_python, "-m", "app.mcp_sprint_bridge"],
+                input=json.dumps(request, ensure_ascii=False),
+                capture_output=True,
+                text=True,
+                timeout=self.settings.agent_timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AgentTimeout("active sprint lookup timed out") from exc
+        except OSError as exc:
+            raise AgentError("Jira MCP sprint bridge unavailable") from exc
+        if completed.returncode != 0:
+            detail = _bounded_error_detail(completed.stdout or completed.stderr)
+            if _looks_like_network_error(detail):
+                raise AgentNetworkError(f"active sprint lookup failed: {detail}")
+            raise AgentError(f"active sprint lookup failed: {detail}")
+        try:
+            response = json.loads(completed.stdout)
+            raw_sprints = response["sprints"]
+            if set(response) != {"sprints"} or not isinstance(raw_sprints, list):
+                raise ValueError
+            sprints = [ActiveSprint(id=item["id"], name=item["name"]) for item in raw_sprints]
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise AgentError("invalid active sprint response") from exc
+        if any(
+            not isinstance(sprint.id, int)
+            or sprint.id <= 0
+            or not isinstance(sprint.name, str)
+            or not sprint.name.strip()
+            for sprint in sprints
+        ):
+            raise AgentError("invalid active sprint response")
+        return sprints
+
+    def create_task(
+        self, task: PlannedTask, jira_account_id: str, sprint_id: int
+    ) -> CreatedTicket:
         request = {
             "cloudId": self.settings.jira_base_url,
             "projectKey": self.settings.project_key,
@@ -220,6 +269,7 @@ INPUT_LINES_JSON={encoded}
             "summary": task.summary,
             "assignee_account_id": jira_account_id,
             "contentFormat": "markdown",
+            "additional_fields": {"customfield_10020": sprint_id},
         }
         if task.description is not None:
             request["description"] = task.description

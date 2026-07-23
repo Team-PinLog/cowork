@@ -36,6 +36,12 @@
       <div class="composer">
         <label class="sr-only" for="todo-input">오늘 할 일</label>
         <textarea id="todo-input" placeholder="오늘 할 일을 편하게 적어주세요" maxlength="10000"></textarea>
+        <div class="sprint-picker">
+          <label for="sprint-select">활성 스프린트</label>
+          <select id="sprint-select" required disabled>
+            <option value="">불러오는 중...</option>
+          </select>
+        </div>
         <div class="composer-footer">
           <span id="progress" class="progress" aria-live="polite"></span>
           <button id="create-button" class="primary" type="button">티켓 만들기</button>
@@ -45,6 +51,10 @@
       <section id="preview-section" class="preview" aria-labelledby="preview-title" hidden>
         <h2 id="preview-title">티켓 정보 확인</h2>
         <p>아래 내용으로 Jira 티켓이 만들어집니다</p>
+        <div class="preview-sprint">
+          <span>스프린트</span>
+          <strong id="preview-sprint-name"></strong>
+        </div>
         <ul id="preview-list"></ul>
         <div class="preview-actions">
           <button id="edit-button" class="secondary" type="button">수정하기</button>

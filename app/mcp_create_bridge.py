@@ -17,6 +17,7 @@ ALLOWED = {
     "description",
     "assignee_account_id",
     "contentFormat",
+    "additional_fields",
 }
 
 
@@ -44,6 +45,15 @@ def main() -> None:
     if payload["issueTypeName"] != "Task":
         raise SystemExit("invalid request")
     if not all(isinstance(payload[key], str) and payload[key] for key in required):
+        raise SystemExit("invalid request")
+    additional_fields = payload.get("additional_fields")
+    if (
+        not isinstance(additional_fields, dict)
+        or set(additional_fields) != {"customfield_10020"}
+        or not isinstance(additional_fields["customfield_10020"], int)
+        or isinstance(additional_fields["customfield_10020"], bool)
+        or additional_fields["customfield_10020"] <= 0
+    ):
         raise SystemExit("invalid request")
 
     discover_mcp_tools()

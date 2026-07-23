@@ -14,6 +14,8 @@ const previewSection = document.querySelector('#preview-section');
 const previewList = document.querySelector('#preview-list');
 const editButton = document.querySelector('#edit-button');
 const confirmButton = document.querySelector('#confirm-button');
+const sprintSelect = document.querySelector('#sprint-select');
+const previewSprintName = document.querySelector('#preview-sprint-name');
 
 let csrfToken = '';
 let creating = false;
@@ -24,7 +26,11 @@ const pendingStorageKey = 'cowork_pending_request';
 function loadPendingRequest() {
   try {
     const value = JSON.parse(sessionStorage.getItem(pendingStorageKey));
-    if (typeof value?.text === 'string' && typeof value?.key === 'string') return value;
+    if (
+      typeof value?.text === 'string'
+      && typeof value?.key === 'string'
+      && Number.isInteger(value?.sprintId)
+    ) return value;
   } catch (_) { /* discard invalid browser state */ }
   return null;
 }
@@ -59,6 +65,31 @@ function showApp(me) {
   accountButton.textContent = me.display_name;
   loginScreen.hidden = true;
   appScreen.hidden = false;
+  loadActiveSprints();
+}
+
+async function loadActiveSprints() {
+  sprintSelect.disabled = true;
+  createButton.disabled = true;
+  sprintSelect.replaceChildren(new Option('불러오는 중...', ''));
+  try {
+    const result = await jsonFetch('/api/sprints');
+    sprintSelect.replaceChildren(new Option('활성 스프린트를 선택해주세요', ''));
+    for (const sprint of result.sprints || []) {
+      sprintSelect.append(new Option(sprint.name, String(sprint.id)));
+    }
+    if (!result.sprints?.length) {
+      sprintSelect.replaceChildren(new Option('활성 스프린트가 없습니다', ''));
+      createError.textContent = '활성 스프린트가 없어서 티켓을 만들 수 없어요';
+      createError.hidden = false;
+      return;
+    }
+    sprintSelect.disabled = false;
+  } catch (error) {
+    sprintSelect.replaceChildren(new Option('불러오지 못했습니다', ''));
+    createError.textContent = error.message;
+    createError.hidden = false;
+  }
 }
 
 async function boot() {
@@ -105,6 +136,8 @@ logoutButton.addEventListener('click', async () => {
     pendingConfirmation = null;
     hidePreview();
     todoInput.disabled = false;
+    sprintSelect.disabled = true;
+    sprintSelect.replaceChildren(new Option('불러오는 중...', ''));
     renderReceipts();
     showLogin();
   }
@@ -136,9 +169,10 @@ function renderReceipts() {
 function hidePreview() {
   previewSection.hidden = true;
   previewList.replaceChildren();
+  previewSprintName.textContent = '';
 }
 
-function showPreview(submissionId, sentText, tasks) {
+function showPreview(submissionId, sentText, sprint, tasks) {
   previewList.replaceChildren();
   for (const task of tasks) {
     const row = document.createElement('li');
@@ -153,8 +187,10 @@ function showPreview(submissionId, sentText, tasks) {
     previewList.append(row);
   }
   pendingConfirmation = {submissionId, sentText};
+  previewSprintName.textContent = sprint?.name || '';
   previewSection.hidden = false;
   todoInput.disabled = true;
+  sprintSelect.disabled = true;
   createButton.disabled = true;
   creating = false;
   createButton.textContent = '티켓 만들기';
@@ -166,7 +202,8 @@ function finishCreation() {
   pendingConfirmation = null;
   hidePreview();
   todoInput.disabled = false;
-  createButton.disabled = false;
+  sprintSelect.disabled = false;
+  createButton.disabled = !sprintSelect.value;
   createButton.textContent = '티켓 만들기';
   confirmButton.disabled = false;
   confirmButton.textContent = '확인하고 만들기';
@@ -188,7 +225,7 @@ async function pollSubmission(submissionId, sentText) {
     if (result.progress) progress.textContent = result.progress;
     if (['received', 'organizing', 'creating'].includes(result.state)) continue;
     if (result.state === 'review') {
-      showPreview(submissionId, sentText, result.preview || []);
+      showPreview(submissionId, sentText, result.sprint, result.preview || []);
       return;
     }
     if (result.tickets?.length) {
@@ -214,7 +251,8 @@ editButton.addEventListener('click', () => {
   pendingConfirmation = null;
   hidePreview();
   todoInput.disabled = false;
-  createButton.disabled = false;
+  sprintSelect.disabled = false;
+  createButton.disabled = !sprintSelect.value;
   progress.textContent = '';
   todoInput.focus();
 });
@@ -250,23 +288,29 @@ confirmButton.addEventListener('click', async () => {
 createButton.addEventListener('click', async () => {
   if (creating) return;
   const sentText = todoInput.value;
-  if (!sentText.trim()) return;
+  const sprintId = Number(sprintSelect.value);
+  if (!sentText.trim() || !Number.isInteger(sprintId) || sprintId <= 0) return;
   creating = true;
   hidePreview();
   createError.hidden = true;
+  sprintSelect.disabled = true;
   createButton.disabled = true;
   createButton.textContent = '정리 중';
   progress.textContent = '할 일 정리하는 중';
   const previous = loadPendingRequest();
-  const attempt = previous?.text === sentText
+  const attempt = previous?.text === sentText && previous?.sprintId === sprintId
     ? previous
-    : {text: sentText, key: crypto.randomUUID()};
+    : {text: sentText, sprintId, key: crypto.randomUUID()};
   savePendingRequest(attempt);
   try {
     const result = await jsonFetch('/api/submissions', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
-      body: JSON.stringify({text: sentText, idempotency_key: attempt.key}),
+      body: JSON.stringify({
+        text: sentText,
+        sprint_id: sprintId,
+        idempotency_key: attempt.key,
+      }),
     });
     await pollSubmission(result.submission_id, sentText);
   } catch (error) {
@@ -276,6 +320,10 @@ createButton.addEventListener('click', async () => {
     createError.hidden = false;
     finishCreation();
   }
+});
+
+sprintSelect.addEventListener('change', () => {
+  createButton.disabled = !sprintSelect.value;
 });
 
 boot();

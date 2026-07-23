@@ -5,6 +5,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agent import ActiveSprint
 from app.config import Settings
 from app.database import Database
 from app.main import create_app
@@ -16,6 +17,9 @@ class ImmediateSuccessWorker:
         self.database = database
         self.prepare_calls = 0
         self.create_calls = 0
+
+    def list_active_sprints(self):
+        return [ActiveSprint(id=50563, name="S15P11A7 1 스프린트 2")]
 
     def prepare(self, submission_id: str) -> None:
         self.prepare_calls += 1
@@ -96,7 +100,11 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
     client, worker, _ = client_and_worker
     csrf = login(client)
     key = str(uuid.uuid4())
-    payload = {"text": "카카오페이 연동 마저 하기", "idempotency_key": key}
+    payload = {
+        "text": "카카오페이 연동 마저 하기",
+        "sprint_id": 50563,
+        "idempotency_key": key,
+    }
     first = client.post("/api/submissions", json=payload, headers={"X-CSRF-Token": csrf})
     second = client.post("/api/submissions", json=payload, headers={"X-CSRF-Token": csrf})
     assert first.status_code == 202
@@ -106,7 +114,7 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
     assert worker.create_calls == 0
     mismatch = client.post(
         "/api/submissions",
-        json={"text": "다른 작업", "idempotency_key": key},
+        json={"text": "다른 작업", "sprint_id": 50563, "idempotency_key": key},
         headers={"X-CSRF-Token": csrf},
     )
     assert mismatch.status_code == 409
@@ -142,13 +150,17 @@ def test_csrf_and_cross_user_submission_access_are_blocked(client_and_worker):
     csrf = login(client)
     denied = client.post(
         "/api/submissions",
-        json={"text": "작업", "idempotency_key": str(uuid.uuid4())},
+        json={"text": "작업", "sprint_id": 50563, "idempotency_key": str(uuid.uuid4())},
     )
     assert denied.status_code == 403
 
     response = client.post(
         "/api/submissions",
-        json={"text": "카카오페이 연동 마저 하기", "idempotency_key": str(uuid.uuid4())},
+        json={
+            "text": "카카오페이 연동 마저 하기",
+            "sprint_id": 50563,
+            "idempotency_key": str(uuid.uuid4()),
+        },
         headers={"X-CSRF-Token": csrf},
     )
     submission_id = response.json()["submission_id"]
