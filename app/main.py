@@ -343,8 +343,6 @@ def create_app(
             raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
         if submission["state"] != "organizing" or not submission["preview"]:
             raise HTTPException(status_code=409, detail="더 이상 수정할 수 없는 티켓입니다")
-        if len(payload.tasks) != len(submission["preview"]):
-            raise HTTPException(status_code=409, detail="티켓 개수는 변경할 수 없습니다")
         try:
             tasks = [
                 {

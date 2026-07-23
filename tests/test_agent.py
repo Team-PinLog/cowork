@@ -6,7 +6,13 @@ import subprocess
 
 import pytest
 
-from app.agent import AgentError, AgentReconciliationRequired, HermesJiraAgent, PlannedTask
+from app.agent import (
+    AgentError,
+    AgentReconciliationRequired,
+    HermesJiraAgent,
+    PlannedTask,
+    _parse_plan_payload,
+)
 from app.config import Settings
 
 
@@ -42,25 +48,29 @@ def test_planner_accepts_only_closed_json(monkeypatch, tmp_path):
             {
                 "tasks": [
                     {
-                        "source_index": 0,
+                        "source_indices": [0, 1],
                         "summary": "카카오페이 결제 연동 완료",
                         "description": None,
                     },
                     {
-                        "source_index": 0,
+                        "source_indices": [0],
                         "summary": "결제 오류 로그 확인",
                         "description": "실패 케이스를 확인한다",
                     },
                 ],
-                "excluded": [{"source_index": 1, "text": "2시 회의"}],
+                "excluded": [{"source_index": 2, "text": "2시 회의"}],
             }
         ),
     )
-    plan = HermesJiraAgent(settings(tmp_path)).plan("작업\n2시 회의")
+    plan = HermesJiraAgent(settings(tmp_path)).plan(
+        "작업\n실패 케이스를 확인한다\n2시 회의"
+    )
     assert [task.summary for task in plan.tasks] == [
         "카카오페이 결제 연동 완료",
         "결제 오류 로그 확인",
     ]
+    assert plan.tasks[0].description == "작업\n실패 케이스를 확인한다"
+    assert plan.tasks[1].description == "실패 케이스를 확인한다"
     assert plan.excluded == ["2시 회의"]
 
     monkeypatch.setattr(
@@ -77,7 +87,7 @@ def test_planner_accepts_only_closed_json(monkeypatch, tmp_path):
         lambda *args, **kwargs: completed(
             {
                 "tasks": [
-                    {"source_index": 0, "summary": "첫 작업", "description": None}
+                    {"source_indices": [0], "summary": "첫 작업", "description": None}
                 ],
                 "excluded": [],
             }
@@ -92,7 +102,7 @@ def test_planner_retries_once_after_schema_mismatch(monkeypatch, tmp_path):
         [
             completed(
                 {
-                    "source_index": 0,
+                    "source_indices": [0],
                     "summary": "로그인 오류 재현",
                     "description": None,
                 }
@@ -101,7 +111,7 @@ def test_planner_retries_once_after_schema_mismatch(monkeypatch, tmp_path):
                 {
                     "tasks": [
                         {
-                            "source_index": 0,
+                            "source_indices": [0],
                             "summary": "로그인 오류 재현",
                             "description": None,
                         }
@@ -123,6 +133,47 @@ def test_planner_retries_once_after_schema_mismatch(monkeypatch, tmp_path):
     assert [task.summary for task in plan.tasks] == ["로그인 오류 재현"]
     assert len(calls) == 2
     assert "schema correction retry" in calls[1]
+
+
+@pytest.mark.parametrize("source_indices", [[[0]], [True], [0, 0]])
+def test_planner_rejects_malformed_source_indices(source_indices):
+    payload = {
+        "tasks": [
+            {
+                "source_indices": source_indices,
+                "summary": "로그인 오류 재현",
+                "description": None,
+            }
+        ],
+        "excluded": [],
+    }
+    with pytest.raises(AgentError, match="invalid planned source indices"):
+        _parse_plan_payload(payload, ["로그인 오류 재현"])
+
+
+def test_planner_accepts_structured_input_over_twenty_lines(monkeypatch, tmp_path):
+    source_lines = [f"상세 내용 {index}" for index in range(21)]
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: completed(
+            {
+                "tasks": [
+                    {
+                        "source_indices": list(range(21)),
+                        "summary": "구조화 작업 처리",
+                        "description": None,
+                    }
+                ],
+                "excluded": [],
+            }
+        ),
+    )
+
+    plan = HermesJiraAgent(settings(tmp_path)).plan("\n".join(source_lines))
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].description == "\n".join(source_lines)
 
 
 def test_creator_calls_only_direct_mcp_bridge_with_fixed_fields(monkeypatch, tmp_path):

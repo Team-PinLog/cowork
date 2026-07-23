@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>할 일 올리기</title>
-  <link rel="stylesheet" href="/static/style.css?v=cf3fbd25f560">
-  <script src="/static/app.js?v=013873d8e411" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=6c9f389f2d25">
+  <script src="/static/app.js?v=532dd187825a" defer></script>
 </head>
 <body>
   <main id="login-screen" class="center-card" hidden>
@@ -33,9 +33,39 @@
     </header>
 
     <section class="workspace">
+      <section class="input-guide" aria-labelledby="input-guide-title">
+        <div class="input-guide-heading">
+          <div>
+            <h1 id="input-guide-title">할 일 입력 가이드</h1>
+            <p>아래 가이드를 본인의 AI에게 전달하면 Cowork에 맞는 형식으로 정리할 수 있습니다.</p>
+          </div>
+          <button id="copy-guide-button" class="secondary copy-guide" type="button">가이드 복사</button>
+        </div>
+        <ul class="guide-rules">
+          <li>서로 독립적인 작업은 각각 별도 티켓으로 나뉩니다.</li>
+          <li>작업 내용과 완료 조건은 해당 티켓의 상세 내용으로 들어갑니다.</li>
+          <li>회의·일정·단순 메모·완료한 작업은 제외됩니다.</li>
+        </ul>
+        <pre id="ai-guide-prompt" class="ai-guide-prompt">다음 내용을 Cowork에 붙여넣을 수 있는 작업 목록으로 정리해줘.
+
+규칙:
+1. 서로 독립적으로 실행할 작업은 각각 별도 항목으로 작성한다.
+2. 각 작업은 아래 형식을 사용한다.
+
+제목: 작업 제목
+작업 내용:
+- 수행할 내용
+완료 조건:
+- 확인 가능한 완료 기준
+
+3. 회의, 일정, 단순 메모, 이미 완료한 작업은 제외한다.
+4. 입력에 없는 사실이나 완료 조건을 새로 만들지 않는다.
+5. 마크다운 코드 블록이나 추가 설명 없이 정리된 작업 목록만 출력한다.</pre>
+        <p id="copy-guide-status" class="copy-guide-status" aria-live="polite"></p>
+      </section>
       <div class="composer">
         <label class="sr-only" for="todo-input">오늘 할 일</label>
-        <textarea id="todo-input" placeholder="오늘 할 일을 편하게 적어주세요" maxlength="10000"></textarea>
+        <textarea id="todo-input" placeholder="작업 목록을 입력하거나 AI가 정리한 내용을 붙여넣어 주세요" maxlength="10000"></textarea>
         <div class="sprint-picker">
           <label for="sprint-select">활성 스프린트</label>
           <select id="sprint-select" required disabled>
@@ -66,6 +96,7 @@
           </div>
         </div>
         <ul id="preview-list"></ul>
+        <button id="add-ticket-button" class="secondary add-ticket" type="button" hidden>+ 티켓 추가</button>
         <div class="preview-actions">
           <button id="edit-button" class="secondary" type="button">수정하기</button>
           <button id="confirm-button" class="primary" type="button">확인하고 만들기</button>

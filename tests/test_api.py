@@ -138,6 +138,30 @@ def test_submission_requires_preview_confirmation_before_ticket_creation(client_
     assert preview["assignee"] == {"display_name": "김팀원", "role_tag": "BE"}
     assert preview["tickets"] == []
 
+    empty = client.put(
+        f"/api/submissions/{submission_id}/draft",
+        json={"tasks": []},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert empty.status_code == 422
+
+    added = client.put(
+        f"/api/submissions/{submission_id}/draft",
+        json={
+            "tasks": [
+                {"summary": "결제 연동 오류 수정", "description": None},
+                {"summary": "결제 모니터링 추가", "description": "지표를 추가한다"},
+            ]
+        },
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert added.status_code == 200
+    assert len(added.json()["preview"]) == 2
+    assert added.json()["preview"][1] == {
+        "summary": "[BE] 결제 모니터링 추가",
+        "description": "## 작업 내용\n지표를 추가한다",
+    }
+
     edited = client.put(
         f"/api/submissions/{submission_id}/draft",
         json={
