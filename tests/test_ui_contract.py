@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 
@@ -50,3 +51,11 @@ def test_receipts_are_not_persisted_in_browser_storage():
     assert "JSON.stringify(receipts)" not in script
     assert "const receipts = []" in script
     assert "cowork_pending_request" in script
+
+
+def test_static_asset_urls_include_current_content_hash():
+    html = Path("app/static/index.html").read_text(encoding="utf-8")
+    for asset in ("app.js", "style.css"):
+        content = Path(f"app/static/{asset}").read_bytes()
+        version = hashlib.sha256(content).hexdigest()[:12]
+        assert f"/static/{asset}?v={version}" in html
