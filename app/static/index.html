@@ -41,6 +41,17 @@
           <button id="create-button" class="primary" type="button">티켓 만들기</button>
         </div>
       </div>
+
+      <section id="preview-section" class="preview" aria-labelledby="preview-title" hidden>
+        <h2 id="preview-title">티켓 정보 확인</h2>
+        <p>아래 내용으로 Jira 티켓이 만들어집니다</p>
+        <ul id="preview-list"></ul>
+        <div class="preview-actions">
+          <button id="edit-button" class="secondary" type="button">수정하기</button>
+          <button id="confirm-button" class="primary" type="button">확인하고 만들기</button>
+        </div>
+      </section>
+
       <p id="create-error" class="error result-error" role="alert" hidden></p>
 
       <section id="receipt-section" class="receipts" hidden>

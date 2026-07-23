@@ -10,9 +10,14 @@ const progress = document.querySelector('#progress');
 const createError = document.querySelector('#create-error');
 const receiptSection = document.querySelector('#receipt-section');
 const ticketList = document.querySelector('#ticket-list');
+const previewSection = document.querySelector('#preview-section');
+const previewList = document.querySelector('#preview-list');
+const editButton = document.querySelector('#edit-button');
+const confirmButton = document.querySelector('#confirm-button');
 
 let csrfToken = '';
 let creating = false;
+let pendingConfirmation = null;
 const receipts = [];
 const pendingStorageKey = 'cowork_pending_request';
 
@@ -97,6 +102,9 @@ logoutButton.addEventListener('click', async () => {
   } finally {
     csrfToken = '';
     receipts.length = 0;
+    pendingConfirmation = null;
+    hidePreview();
+    todoInput.disabled = false;
     renderReceipts();
     showLogin();
   }
@@ -125,10 +133,43 @@ function renderReceipts() {
   }
 }
 
+function hidePreview() {
+  previewSection.hidden = true;
+  previewList.replaceChildren();
+}
+
+function showPreview(submissionId, sentText, tasks) {
+  previewList.replaceChildren();
+  for (const task of tasks) {
+    const row = document.createElement('li');
+    const summary = document.createElement('strong');
+    summary.textContent = task.summary;
+    row.append(summary);
+    if (task.description) {
+      const description = document.createElement('p');
+      description.textContent = task.description;
+      row.append(description);
+    }
+    previewList.append(row);
+  }
+  pendingConfirmation = {submissionId, sentText};
+  previewSection.hidden = false;
+  todoInput.disabled = true;
+  createButton.disabled = true;
+  creating = false;
+  createButton.textContent = '티켓 만들기';
+  progress.textContent = '';
+}
+
 function finishCreation() {
   creating = false;
+  pendingConfirmation = null;
+  hidePreview();
+  todoInput.disabled = false;
   createButton.disabled = false;
   createButton.textContent = '티켓 만들기';
+  confirmButton.disabled = false;
+  confirmButton.textContent = '확인하고 만들기';
   progress.textContent = '';
 }
 
@@ -146,6 +187,10 @@ async function pollSubmission(submissionId, sentText) {
     }
     if (result.progress) progress.textContent = result.progress;
     if (['received', 'organizing', 'creating'].includes(result.state)) continue;
+    if (result.state === 'review') {
+      showPreview(submissionId, sentText, result.preview || []);
+      return;
+    }
     if (result.tickets?.length) {
       receipts.unshift(...result.tickets.slice().reverse());
       renderReceipts();
@@ -165,14 +210,52 @@ async function pollSubmission(submissionId, sentText) {
   }
 }
 
+editButton.addEventListener('click', () => {
+  pendingConfirmation = null;
+  hidePreview();
+  todoInput.disabled = false;
+  createButton.disabled = false;
+  progress.textContent = '';
+  todoInput.focus();
+});
+
+confirmButton.addEventListener('click', async () => {
+  if (creating || !pendingConfirmation) return;
+  const pending = pendingConfirmation;
+  creating = true;
+  createError.hidden = true;
+  editButton.disabled = true;
+  confirmButton.disabled = true;
+  confirmButton.textContent = '만드는 중';
+  progress.textContent = '티켓 만드는 중';
+  try {
+    await jsonFetch(`/api/submissions/${pending.submissionId}/confirm`, {
+      method: 'POST',
+      headers: {'X-CSRF-Token': csrfToken},
+    });
+    previewSection.hidden = true;
+    editButton.disabled = false;
+    await pollSubmission(pending.submissionId, pending.sentText);
+  } catch (error) {
+    createError.textContent = error.message;
+    createError.hidden = false;
+    creating = false;
+    editButton.disabled = false;
+    confirmButton.disabled = false;
+    confirmButton.textContent = '확인하고 만들기';
+    progress.textContent = '';
+  }
+});
+
 createButton.addEventListener('click', async () => {
   if (creating) return;
   const sentText = todoInput.value;
   if (!sentText.trim()) return;
   creating = true;
+  hidePreview();
   createError.hidden = true;
   createButton.disabled = true;
-  createButton.textContent = '만드는 중';
+  createButton.textContent = '정리 중';
   progress.textContent = '할 일 정리하는 중';
   const previous = loadPendingRequest();
   const attempt = previous?.text === sentText

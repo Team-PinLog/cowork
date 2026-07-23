@@ -237,7 +237,30 @@ def create_app(
         except IdempotencyConflict as exc:
             raise HTTPException(status_code=409, detail="요청을 다시 확인해주세요") from exc
         if created:
-            background_tasks.add_task(worker.process, submission_id)
+            background_tasks.add_task(worker.prepare, submission_id)
+        return {"submission_id": submission_id}
+
+    @app.post("/api/submissions/{submission_id}/confirm", status_code=202)
+    def confirm_submission(
+        submission_id: str,
+        background_tasks: BackgroundTasks,
+        cowork_session: str | None = Cookie(default=None),
+        x_csrf_token: str | None = Header(default=None),
+    ) -> dict[str, str]:
+        user, csrf_token, _ = session_context(cowork_session)
+        require_csrf(csrf_token, x_csrf_token)
+        try:
+            uuid.UUID(submission_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다") from exc
+        submission = database.get_submission(submission_id, user["id"])
+        if not submission:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        claimed = database.claim_confirmation(submission_id, user["id"])
+        if claimed:
+            background_tasks.add_task(worker.create, submission_id)
+        elif submission["state"] not in {"creating", "completed", "partial", "reconcile"}:
+            raise HTTPException(status_code=409, detail="티켓 정보를 다시 확인해주세요")
         return {"submission_id": submission_id}
 
     @app.get("/api/submissions/{submission_id}")
@@ -253,17 +276,23 @@ def create_app(
         submission = database.get_submission(submission_id, user["id"])
         if not submission:
             raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        state = (
+            "review"
+            if submission["state"] == "organizing" and submission["preview"]
+            else submission["state"]
+        )
         progress = {
             "received": "할 일 정리하는 중",
             "organizing": "할 일 정리하는 중",
             "creating": "티켓 만드는 중",
-        }.get(submission["state"])
+        }.get(state)
         return {
-            "state": submission["state"],
+            "state": state,
             "progress": progress,
             "message": submission["public_message"],
+            "preview": submission["preview"],
             "tickets": submission["tickets"],
-            "retryable": submission["state"] == "failed",
+            "retryable": state == "failed",
         }
 
     return app

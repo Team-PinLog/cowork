@@ -18,8 +18,17 @@ def test_screen_contract_and_forbidden_vocabulary():
         "할 일 정리하는 중",
         "티켓 만드는 중",
         "만드는 중",
+        "티켓 정보 확인",
+        "아래 내용으로 Jira 티켓이 만들어집니다",
+        "수정하기",
+        "확인하고 만들기",
     ):
         assert required in full_contract
+
+    assert 'id="preview-section"' in html
+    assert 'id="preview-list"' in html
+    assert 'id="confirm-button"' in html
+    assert "/confirm" in script
 
     for forbidden in ("이슈", "이슈 타입", "백로그", "에픽", "스토리", "하위 작업", "어사인", "담당자 배정", "스프린트"):
         assert forbidden not in visible_contract
