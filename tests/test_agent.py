@@ -136,7 +136,7 @@ def test_creator_calls_only_direct_mcp_bridge_with_fixed_fields(monkeypatch, tmp
         return bridge_completed({"issue_key": "S15P11A705-10"})
 
     monkeypatch.setattr(subprocess, "run", success)
-    ticket = agent.create_task(task, "account-id")
+    ticket = agent.create_task(task, "account-id", 50563)
     assert ticket.issue_key == "S15P11A705-10"
     assert observed["command"][0] == agent.settings.hermes_python
     assert observed["command"][1:] == ["-m", "app.mcp_create_bridge"]
@@ -147,6 +147,7 @@ def test_creator_calls_only_direct_mcp_bridge_with_fixed_fields(monkeypatch, tmp
         "summary": "결제 연동 완료",
         "assignee_account_id": "account-id",
         "contentFormat": "markdown",
+        "additional_fields": {"customfield_10020": 50563},
     }
 
     monkeypatch.setattr(
@@ -155,7 +156,7 @@ def test_creator_calls_only_direct_mcp_bridge_with_fixed_fields(monkeypatch, tmp
         lambda *args, **kwargs: bridge_completed({"issue_key": "OTHER-10"}),
     )
     with pytest.raises(AgentError):
-        agent.create_task(task, "account-id")
+        agent.create_task(task, "account-id", 50563)
 
     monkeypatch.setattr(
         subprocess,
@@ -163,7 +164,7 @@ def test_creator_calls_only_direct_mcp_bridge_with_fixed_fields(monkeypatch, tmp
         lambda *args, **kwargs: bridge_completed({"error": "synthetic"}, returncode=1),
     )
     with pytest.raises(AgentError, match="synthetic"):
-        agent.create_task(task, "account-id")
+        agent.create_task(task, "account-id", 50563)
 
     monkeypatch.setattr(
         subprocess,
@@ -173,7 +174,7 @@ def test_creator_calls_only_direct_mcp_bridge_with_fixed_fields(monkeypatch, tmp
         ),
     )
     with pytest.raises(AgentReconciliationRequired):
-        agent.create_task(task, "account-id")
+        agent.create_task(task, "account-id", 50563)
 
 
 def test_agent_passes_prompts_as_single_argument_without_shell(monkeypatch, tmp_path):

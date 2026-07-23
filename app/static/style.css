@@ -6,7 +6,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background: #f5f7fa; }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
@@ -18,6 +18,10 @@ h1 { margin: 0 0 8px; font-size: 28px; }
 input, textarea { width: 100%; border: 1px solid #cfd6df; border-radius: 10px; background: #fff; color: #18202b; outline: none; }
 input { height: 48px; padding: 0 14px; }
 textarea { min-height: 210px; padding: 18px; resize: vertical; line-height: 1.6; border: 0; }
+.sprint-picker { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid #edf0f4; }
+.sprint-picker label { flex: 0 0 auto; color: #4f5b6d; font-size: 14px; font-weight: 700; }
+.sprint-picker select { width: 100%; min-width: 0; height: 42px; padding: 0 12px; border: 1px solid #cfd6df; border-radius: 9px; background: #fff; color: #18202b; }
+.sprint-picker select:disabled { color: #7d8797; background: #f3f5f8; }
 input:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(47,100,255,.14); }
 .primary { border: 0; border-radius: 9px; background: #2f64ff; color: #fff; padding: 11px 18px; font-weight: 700; }
 .primary:hover { background: #2453dc; }
@@ -37,6 +41,9 @@ input:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(47,100,255,.14); }
 .preview { margin-top: 20px; padding: 22px; background: #fff; border: 1px solid #dce1e8; border-radius: 14px; box-shadow: 0 10px 28px rgba(28,39,54,.05); }
 .preview h2 { margin: 0 0 6px; font-size: 19px; }
 .preview > p { margin: 0 0 18px; color: #647084; font-size: 14px; }
+.preview-sprint { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 11px 13px; border-radius: 9px; background: #eef3ff; }
+.preview-sprint span { color: #53617a; font-size: 13px; font-weight: 700; }
+.preview-sprint strong { color: #244ebd; }
 #preview-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 #preview-list li { padding: 15px 16px; border: 1px solid #e1e6ed; border-radius: 10px; background: #f9fafc; }
 #preview-list strong { display: block; line-height: 1.5; }

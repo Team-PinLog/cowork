@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS submissions (
     user_id INTEGER NOT NULL REFERENCES users(id),
     idempotency_key TEXT NOT NULL,
     raw_input TEXT NOT NULL,
+    sprint_id INTEGER,
+    sprint_name TEXT,
     state TEXT NOT NULL CHECK (state IN ('received','organizing','creating','completed','partial','failed','reconcile')),
     public_message TEXT,
     excluded_json TEXT NOT NULL DEFAULT '[]',
@@ -99,6 +101,10 @@ class Database:
                 conn.execute(
                     "ALTER TABLE submissions ADD COLUMN planned_tasks_json TEXT NOT NULL DEFAULT '[]'"
                 )
+            if "sprint_id" not in columns:
+                conn.execute("ALTER TABLE submissions ADD COLUMN sprint_id INTEGER")
+            if "sprint_name" not in columns:
+                conn.execute("ALTER TABLE submissions ADD COLUMN sprint_name TEXT")
 
     def upsert_user(self, email: str, password_hash: str, display_name: str, jira_account_id: str) -> None:
         if not jira_account_id.strip():
@@ -152,26 +158,43 @@ class Database:
             conn.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
 
     def create_submission(
-        self, submission_id: str, user_id: int, idempotency_key: str, raw_input: str
+        self,
+        submission_id: str,
+        user_id: int,
+        idempotency_key: str,
+        raw_input: str,
+        sprint_id: int,
+        sprint_name: str,
     ) -> tuple[str, bool]:
         now = int(time.time())
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT id,raw_input FROM submissions WHERE user_id=? AND idempotency_key=?",
+                """SELECT id,raw_input,sprint_id FROM submissions
+                   WHERE user_id=? AND idempotency_key=?""",
                 (user_id, idempotency_key),
             ).fetchone()
             if row:
-                if row["raw_input"] != raw_input:
+                if row["raw_input"] != raw_input or row["sprint_id"] != sprint_id:
                     conn.rollback()
                     raise IdempotencyConflict("idempotency key was reused with different input")
                 conn.commit()
                 return str(row["id"]), False
             conn.execute(
                 """INSERT INTO submissions
-                   (id,user_id,idempotency_key,raw_input,state,created_at,updated_at)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (submission_id, user_id, idempotency_key, raw_input, "received", now, now),
+                   (id,user_id,idempotency_key,raw_input,sprint_id,sprint_name,state,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (
+                    submission_id,
+                    user_id,
+                    idempotency_key,
+                    raw_input,
+                    sprint_id,
+                    sprint_name,
+                    "received",
+                    now,
+                    now,
+                ),
             )
             conn.commit()
         return submission_id, True

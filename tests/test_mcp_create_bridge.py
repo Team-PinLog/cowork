@@ -32,6 +32,7 @@ def test_dispatch_exception_exits_as_post_create_ambiguous(monkeypatch, capsys):
         "summary": "합성 작업",
         "assignee_account_id": "synthetic-account",
         "contentFormat": "markdown",
+        "additional_fields": {"customfield_10020": 50563},
     }
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(request)))
 
@@ -72,6 +73,7 @@ def test_direct_atlassian_create_response_returns_issue_key(monkeypatch, capsys)
         "summary": "합성 작업",
         "assignee_account_id": "synthetic-account",
         "contentFormat": "markdown",
+        "additional_fields": {"customfield_10020": 50563},
     }
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(request)))
 

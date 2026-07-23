@@ -26,6 +26,9 @@ class SubmissionWorker:
         self.agent = agent
         self.alerter = alerter
 
+    def list_active_sprints(self):
+        return self.agent.list_active_sprints()
+
     def _alert(self, *, error: str, raw_input: str, user_name: str) -> str:
         try:
             self.alerter.send_failure(error=error, raw_input=raw_input, user_name=user_name)
@@ -147,7 +150,11 @@ class SubmissionWorker:
         timed_out = False
         for task in plan.tasks:
             try:
-                ticket = self.agent.create_task(task, submission["jira_account_id"])
+                ticket = self.agent.create_task(
+                    task,
+                    submission["jira_account_id"],
+                    submission["sprint_id"],
+                )
             except AgentReconciliationRequired as exc:
                 detail = self._alert(
                     error=str(exc), raw_input=raw_input, user_name=user_name
