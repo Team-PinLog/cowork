@@ -14,12 +14,21 @@ from app.security import hash_password
 class ImmediateSuccessWorker:
     def __init__(self, database: Database):
         self.database = database
-        self.calls = 0
+        self.prepare_calls = 0
+        self.create_calls = 0
 
-    def process(self, submission_id: str) -> None:
-        self.calls += 1
+    def prepare(self, submission_id: str) -> None:
+        self.prepare_calls += 1
+        self.database.update_submission(submission_id, "organizing")
+        self.database.save_plan(
+            submission_id,
+            [{"summary": "결제 연동 완료", "description": None}],
+            [],
+        )
+
+    def create(self, submission_id: str) -> None:
+        self.create_calls += 1
         submission = self.database.get_submission_for_worker(submission_id)
-        self.database.update_submission(submission_id, "creating")
         self.database.add_ticket(
             submission_id,
             "S15P11A705-101",
@@ -28,6 +37,9 @@ class ImmediateSuccessWorker:
         )
         self.database.update_submission(submission_id, "completed")
         assert submission["raw_input"] == "카카오페이 연동 마저 하기"
+
+    def process(self, submission_id: str) -> None:
+        self.create(submission_id)
 
 
 @pytest.fixture
@@ -80,7 +92,7 @@ def test_login_messages_and_30_day_session(client_and_worker):
     assert client.get("/api/me").json()["display_name"] == "김팀원"
 
 
-def test_submission_is_idempotent_and_returns_ticket_receipt(client_and_worker):
+def test_submission_requires_preview_confirmation_before_ticket_creation(client_and_worker):
     client, worker, _ = client_and_worker
     csrf = login(client)
     key = str(uuid.uuid4())
@@ -90,7 +102,8 @@ def test_submission_is_idempotent_and_returns_ticket_receipt(client_and_worker):
     assert first.status_code == 202
     assert second.status_code == 202
     assert first.json()["submission_id"] == second.json()["submission_id"]
-    assert worker.calls == 1
+    assert worker.prepare_calls == 1
+    assert worker.create_calls == 0
     mismatch = client.post(
         "/api/submissions",
         json={"text": "다른 작업", "idempotency_key": key},
@@ -98,7 +111,22 @@ def test_submission_is_idempotent_and_returns_ticket_receipt(client_and_worker):
     )
     assert mismatch.status_code == 409
 
-    status = client.get(f"/api/submissions/{first.json()['submission_id']}").json()
+    submission_id = first.json()["submission_id"]
+    preview = client.get(f"/api/submissions/{submission_id}").json()
+    assert preview["state"] == "review"
+    assert preview["preview"] == [
+        {"summary": "결제 연동 완료", "description": None}
+    ]
+    assert preview["tickets"] == []
+
+    confirmed = client.post(
+        f"/api/submissions/{submission_id}/confirm",
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert confirmed.status_code == 202
+    assert worker.create_calls == 1
+
+    status = client.get(f"/api/submissions/{submission_id}").json()
     assert status["state"] == "completed"
     assert status["tickets"] == [
         {

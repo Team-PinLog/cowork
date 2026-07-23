@@ -7,6 +7,8 @@ from .agent import (
     AgentReconciliationRequired,
     AgentTimeout,
     HermesJiraAgent,
+    Plan,
+    PlannedTask,
 )
 from .alerts import MattermostAlerter
 from .database import Database
@@ -52,7 +54,7 @@ class SubmissionWorker:
             else:
                 self.database.record_alert_attempt(alert["id"], delivered=True)
 
-    def process(self, submission_id: str) -> None:
+    def prepare(self, submission_id: str) -> None:
         self.flush_pending_alerts()
         submission = self.database.get_submission_for_worker(submission_id)
         if not submission:
@@ -94,7 +96,53 @@ class SubmissionWorker:
             )
             return
 
-        self.database.update_submission(submission_id, "creating", excluded=plan.excluded)
+        try:
+            self.database.save_plan(
+                submission_id,
+                [
+                    {"summary": task.summary, "description": task.description}
+                    for task in plan.tasks
+                ],
+                plan.excluded,
+            )
+        except Exception as exc:
+            detail = self._alert(
+                error=f"preview persistence failed: {type(exc).__name__}",
+                raw_input=raw_input,
+                user_name=user_name,
+            )
+            self.database.update_submission(
+                submission_id,
+                "failed",
+                public_message=GENERIC_FAILURE,
+                internal_error=detail,
+            )
+
+    def create(self, submission_id: str) -> None:
+        self.flush_pending_alerts()
+        submission = self.database.get_submission_for_worker(submission_id)
+        if not submission or submission["state"] != "creating":
+            return
+        raw_input = submission["raw_input"]
+        user_name = submission["display_name"]
+        plan = Plan(
+            tasks=[PlannedTask(**task) for task in submission["planned_tasks"]],
+            excluded=submission["excluded"],
+        )
+        if not plan.tasks:
+            detail = self._alert(
+                error="confirmed submission has no planned tasks",
+                raw_input=raw_input,
+                user_name=user_name,
+            )
+            self.database.update_submission(
+                submission_id,
+                "failed",
+                public_message=GENERIC_FAILURE,
+                internal_error=detail,
+            )
+            return
+
         failures: list[str] = []
         timed_out = False
         for task in plan.tasks:
@@ -175,6 +223,17 @@ class SubmissionWorker:
         self.database.update_submission(
             submission_id, "completed", excluded=plan.excluded
         )
+
+    def process(self, submission_id: str) -> None:
+        """Backward-compatible one-shot path used by worker-level tests."""
+        self.prepare(submission_id)
+        submission = self.database.get_submission_for_worker(submission_id)
+        if not submission or not submission["planned_tasks"]:
+            return
+        self.database.update_submission(
+            submission_id, "creating", excluded=submission["excluded"]
+        )
+        self.create(submission_id)
 
     def recover_inflight(self) -> None:
         self.flush_pending_alerts()

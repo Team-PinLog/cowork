@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     state TEXT NOT NULL CHECK (state IN ('received','organizing','creating','completed','partial','failed','reconcile')),
     public_message TEXT,
     excluded_json TEXT NOT NULL DEFAULT '[]',
+    planned_tasks_json TEXT NOT NULL DEFAULT '[]',
     internal_error TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
@@ -93,6 +94,11 @@ class Database:
     def initialize(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(submissions)")}
+            if "planned_tasks_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE submissions ADD COLUMN planned_tasks_json TEXT NOT NULL DEFAULT '[]'"
+                )
 
     def upsert_user(self, email: str, password_hash: str, display_name: str, jira_account_id: str) -> None:
         if not jira_account_id.strip():
@@ -193,6 +199,37 @@ class Database:
                 ),
             )
 
+    def save_plan(
+        self,
+        submission_id: str,
+        tasks: list[dict[str, Any]],
+        excluded: list[str],
+    ) -> None:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """UPDATE submissions
+                   SET state='organizing', planned_tasks_json=?, excluded_json=?, updated_at=?
+                   WHERE id=? AND state='organizing'""",
+                (
+                    json.dumps(tasks, ensure_ascii=False),
+                    json.dumps(excluded, ensure_ascii=False),
+                    int(time.time()),
+                    submission_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("submission plan was not persisted")
+
+    def claim_confirmation(self, submission_id: str, user_id: int) -> bool:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """UPDATE submissions SET state='creating', updated_at=?
+                   WHERE id=? AND user_id=? AND state='organizing'
+                     AND planned_tasks_json != '[]'""",
+                (int(time.time()), submission_id, user_id),
+            )
+        return cursor.rowcount == 1
+
     def add_ticket(self, submission_id: str, issue_key: str, summary: str, url: str) -> None:
         with self.connect() as conn:
             cursor = conn.execute(
@@ -239,6 +276,7 @@ class Database:
             ).fetchall()
         result = dict(row)
         result["excluded"] = json.loads(result.pop("excluded_json"))
+        result["preview"] = json.loads(result.pop("planned_tasks_json"))
         result["tickets"] = [dict(ticket) for ticket in tickets]
         result.pop("raw_input", None)
         result.pop("internal_error", None)
@@ -252,13 +290,19 @@ class Database:
                    JOIN users u ON u.id=s.user_id WHERE s.id=?""",
                 (submission_id,),
             ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        result = dict(row)
+        result["excluded"] = json.loads(result.pop("excluded_json"))
+        result["planned_tasks"] = json.loads(result.pop("planned_tasks_json"))
+        return result
 
     def list_inflight_submissions(self) -> list[dict[str, Any]]:
         with self.connect() as conn:
             rows = conn.execute(
                 """SELECT s.id,s.state,s.raw_input,u.display_name FROM submissions s
                    JOIN users u ON u.id=s.user_id
-                   WHERE s.state IN ('received','organizing','creating')"""
+                   WHERE s.state IN ('received','creating')
+                      OR (s.state='organizing' AND s.planned_tasks_json='[]')"""
             ).fetchall()
         return [dict(row) for row in rows]
