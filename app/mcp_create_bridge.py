@@ -56,11 +56,16 @@ def main() -> None:
         if not isinstance(outer, dict) or set(outer) != {"result"}:
             _ambiguous()
         body = _decode(outer["result"])
-        if not isinstance(body, dict) or set(body) != {"statusCode", "data"}:
+        if not isinstance(body, dict):
             _ambiguous()
-        if body["statusCode"] not in {200, 201}:
-            raise SystemExit("create failed")
-        data = body["data"]
+        if set(body) == {"statusCode", "data"}:
+            if body["statusCode"] not in {200, 201}:
+                raise SystemExit("create failed")
+            data = body["data"]
+        elif set(body) == {"id", "key", "self"}:
+            data = body
+        else:
+            _ambiguous()
         if not isinstance(data, dict) or not set(data).issubset({"id", "key", "self"}):
             _ambiguous()
         issue_key = data.get("key")
